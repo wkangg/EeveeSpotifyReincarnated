@@ -43,6 +43,17 @@ private func strippedEncoding(_ method: Method) -> String {
     return String(cString: raw).filter { !$0.isNumber }
 }
 
+// Bridging a class to Any/AnyObject sends it retain/release. Some root classes
+// (e.g. __NSGenericDeallocHandler) trap on that, so only touch NSObject subclasses.
+private func inheritsFromNSObject(_ cls: AnyClass) -> Bool {
+    var current: AnyClass? = cls
+    while let c = current {
+        if ObjectIdentifier(c) == ObjectIdentifier(NSObject.self) { return true }
+        current = class_getSuperclass(c)
+    }
+    return false
+}
+
 // class_copyMethodList never runs +initialize or +resolveInstanceMethod:.
 private func ownMethod(_ cls: AnyClass, _ sel: Selector) -> Method? {
     var count: UInt32 = 0
@@ -84,6 +95,7 @@ func activateDiagProductState() {
     var found = 0
     for i in 0..<Int(min(got, total)) {
         let cls: AnyClass = buffer[i]
+        guard inheritsFromNSObject(cls) else { continue }
         let name = String(cString: class_getName(cls))
         var candidates: [(Method, String)] = []
         if let m = ownMethod(cls, sel) { candidates.append((m, "-[\(name)]")) }
