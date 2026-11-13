@@ -33,6 +33,8 @@ class SPTDataLoaderServiceHook: ClassHook<NSObject>, SpotifySessionDelegate {
         didCompleteWithError error: Error?
     ) {
         captureAccessToken(from: task.currentRequest)
+        diagNetLog("DLS", task.currentRequest?.url,
+                   extra: "status=\((task.response as? HTTPURLResponse)?.statusCode ?? -1) err=\(error != nil)")
 
         guard let url = task.currentRequest?.url else {
             orig.URLSession(session, task: task, didCompleteWithError: error)

@@ -154,6 +154,12 @@ private let premiumWatchKeys: [String] = [
 ]
 
 private func passiveLogProductState(_ tag: String, _ dict: NSDictionary) {
+    let diagElapsed = Int(Date().timeIntervalSince(tweakInitTime))
+    let diagPairs = ["type", "catalogue", "ads", "on-demand", "player-license"].map { key -> String in
+        guard let value = dict[key] else { return "\(key)=nil" }
+        return "\(key)=\(value)(\(type(of: value)))"
+    }
+    writeDebugLog("[DIAG][PRODUCT_STATE] t=\(diagElapsed)s \(tag) keys=\(dict.count) \(diagPairs.joined(separator: " "))")
     if dict["ads"] as? String == "1" {
         writeDebugLog("[ORACLE][ENTITLEMENT_DRIFT] SPTCoreProductState reported ads=1 in \(tag)")
     }

@@ -326,6 +326,8 @@ class URLSessionTaskResumeHook: ClassHook<NSObject> {
             let elapsedInt = Int(elapsed)
             let path = url.path
 
+            diagNetLog("RESUME", url, extra: "task=\(type(of: task))")
+
             if url.isAdRelated {
                 writeDebugLog("[ORACLE][NET_BLOCK] Cancelled ad task at \(elapsedInt)s: \(host)\(path)")
                 task.cancel()
