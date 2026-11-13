@@ -189,6 +189,10 @@ class CoreProductStateHook: ClassHook<NSObject> {
     }
 
     func initWithValuesDict(_ dict: NSDictionary, scheduler: UnsafeRawPointer) -> Any {
+        if diagShouldLog("initWithValuesDict", limit: 5) {
+            let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
+            writeDebugLog("[DIAG][PRODUCT_STATE] t=\(elapsed)s initWithValuesDict \(diagDescribeProductState(dict))")
+        }
         let d = enableDictRewrite ? rewritePremiumDict(dict) : dict
         return orig.initWithValuesDict(d, scheduler: scheduler)
     }
@@ -209,6 +213,10 @@ class CoreProductStateHook: ClassHook<NSObject> {
 
     func values() -> NSDictionary {
         let d = orig.values()
+        if diagShouldLog("values", limit: 3) {
+            let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
+            writeDebugLog("[DIAG][PRODUCT_STATE] t=\(elapsed)s values() \(diagDescribeProductState(d))")
+        }
         return enableDictRewrite ? rewritePremiumDict(d) : d
     }
 

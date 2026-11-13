@@ -219,6 +219,7 @@ struct EeveeSpotify: Tweak {
 
         // Local-only premium force; independent of patching, so premium UI survives everything else being off.
         activateEeveePremiumForce()
+        activateDiagProductState()
 
         activateTelemetryBlock()
         activateTheme()
@@ -250,7 +251,8 @@ struct EeveeSpotify: Tweak {
 
         // Full protection crashes some 9.1.x builds.
         if EeveeSpotify.hookTarget == .v91 {
-            activateSessionLogoutProtection(minimal: true)
+            // DIAG: full protection on 9.2 so SPTAuthSessionHook logs productStateUpdated.
+            activateSessionLogoutProtection(minimal: EeveeSpotify.spotifyVersion.hasPrefix("9.1."))
         } else {
             activateSessionLogoutProtection(minimal: false)
         }
