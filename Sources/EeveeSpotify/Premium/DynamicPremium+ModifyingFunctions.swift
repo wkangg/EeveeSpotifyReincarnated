@@ -449,6 +449,21 @@ func isCohortAdOrUpsellFlag(scope: String, name: String) -> Bool {
     return tokens.contains { adTokens.contains($0) }
 }
 
+// DIAG: rewrite a serialized AccountAttributesResponse (the native product-state
+// injector's payload) to Premium. Returns nil if the bytes aren't that proto.
+func diagRewriteAttributesData(_ data: Data) -> Data? {
+    guard var resp = try? AccountAttributesResponse(serializedBytes: data) else { return nil }
+    guard !resp.accountAttributes.isEmpty else { return nil }
+    func desc(_ k: String) -> String {
+        resp.accountAttributes[k].map { "\($0.value.map { "\($0)" } ?? "nil")" } ?? "absent"
+    }
+    let before = "on-demand=\(desc("on-demand")) player-license=\(desc("player-license")) type=\(desc("type"))"
+    modifyAttributes(&resp.accountAttributes)
+    let after = "on-demand=\(desc("on-demand")) player-license=\(desc("player-license")) type=\(desc("type"))"
+    writeDebugLog("[DIAG][INJECT] attrs=\(resp.accountAttributes.count) before[\(before)] after[\(after)]")
+    return try? resp.serializedData()
+}
+
 private func modifyAttributes(_ attributes: inout [String: AccountAttribute]) {
     let serverAuthoritativeAttributes = Dictionary(
         uniqueKeysWithValues: ServerSidedFeaturePolicy.serverAuthoritativeAccountAttributes

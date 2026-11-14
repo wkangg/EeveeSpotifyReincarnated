@@ -131,6 +131,72 @@ func activateDiagProductState() {
     }
     writeDebugLog("[DIAG][MINIMAL_SESSION] scanned \(got) classes, \(found) implementation(s)")
     dumpProductStateResolvers()
+    installInjectorLogger()
+}
+
+// MARK: - RCCProductStateInjector.injectWithAttributesData:error:
+// Rewrites the native product-state injection payload to Premium. This is the
+// candidate chokepoint for the Free state that still gates queue/on-demand on 9.2.
+
+private let injectorSelectorName = "injectWithAttributesData:error:"
+private var originalInjectorIMP: IMP?
+
+// data (NSData), error (NSError**). Rewrites data, returns Premium bytes to orig.
+private func premiumInjectData(_ data: AnyObject?) -> AnyObject? {
+    guard let ns = data as? Data else { return data }
+    let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
+    guard let rewritten = diagRewriteAttributesData(ns) else {
+        writeDebugLog("[DIAG][INJECT] t=\(elapsed)s not AccountAttributesResponse (size=\(ns.count)); passthrough")
+        return data
+    }
+    writeDebugLog("[DIAG][INJECT] t=\(elapsed)s rewrote \(ns.count)->\(rewritten.count) bytes")
+    return rewritten as NSData
+}
+
+private func installInjectorLogger() {
+    guard let cls: AnyClass = NSClassFromString("RCCProductStateInjector") else {
+        writeDebugLog("[DIAG][INJECT] RCCProductStateInjector not found")
+        return
+    }
+    let sel = Selector((injectorSelectorName))
+    guard let method = ownMethod(cls, sel) else {
+        writeDebugLog("[DIAG][INJECT] no \(injectorSelectorName) on RCCProductStateInjector")
+        return
+    }
+    let encoding = strippedEncoding(method)
+    writeDebugLog("[DIAG][INJECT] found injectWithAttributesData:error: encoding=\(encoding)")
+    originalInjectorIMP = method_getImplementation(method)
+    let ret = encoding.first
+
+    // Branch on the return type so the @convention(c) cast matches the real ABI.
+    if ret == "B" || ret == "c" {
+        typealias IMPc = @convention(c) (AnyObject, Selector, AnyObject?, UnsafeMutableRawPointer?) -> ObjCBool
+        let block: @convention(block) (AnyObject, AnyObject?, UnsafeMutableRawPointer?) -> ObjCBool = { obj, data, err in
+            let orig = unsafeBitCast(originalInjectorIMP!, to: IMPc.self)
+            return orig(obj, Selector((injectorSelectorName)), premiumInjectData(data), err)
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+        writeDebugLog("[DIAG][INJECT] logger installed (BOOL return)")
+    } else if ret == "v" {
+        typealias IMPc = @convention(c) (AnyObject, Selector, AnyObject?, UnsafeMutableRawPointer?) -> Void
+        let block: @convention(block) (AnyObject, AnyObject?, UnsafeMutableRawPointer?) -> Void = { obj, data, err in
+            let orig = unsafeBitCast(originalInjectorIMP!, to: IMPc.self)
+            orig(obj, Selector((injectorSelectorName)), premiumInjectData(data), err)
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+        writeDebugLog("[DIAG][INJECT] logger installed (void return)")
+    } else if ret == "@" {
+        typealias IMPc = @convention(c) (AnyObject, Selector, AnyObject?, UnsafeMutableRawPointer?) -> AnyObject?
+        let block: @convention(block) (AnyObject, AnyObject?, UnsafeMutableRawPointer?) -> AnyObject? = { obj, data, err in
+            let orig = unsafeBitCast(originalInjectorIMP!, to: IMPc.self)
+            return orig(obj, Selector((injectorSelectorName)), premiumInjectData(data), err)
+        }
+        method_setImplementation(method, imp_implementationWithBlock(block))
+        writeDebugLog("[DIAG][INJECT] logger installed (object return)")
+    } else {
+        originalInjectorIMP = nil
+        writeDebugLog("[DIAG][INJECT] unexpected return '\(ret.map(String.init) ?? "?")'; not hooking")
+    }
 }
 
 // List every NSObject subclass whose name points at the Swift product-state
