@@ -16,9 +16,17 @@ $(shell mkdir -p Sources/EeveeSpotify/Generated)
 $(shell printf 'enum GeneratedConfig {\n    static let repoSlug = "%s"\n    static let branchName = "%s"\n}\n' "$(REPO_SLUG_FINAL)" "$(BRANCH_NAME_FINAL)" > Sources/EeveeSpotify/Generated/RepoSlug.swift)
 
 EeveeSpotify_FILES = $(shell find Sources/EeveeSpotify -name '*.swift') $(shell find Sources/EeveeSpotifyC -name '*.m' -o -name '*.c' -o -name '*.mm' -o -name '*.cpp')
+# EEVEE_FAST=1 trades an optimised build for a much shorter Swift compile, for
+# the install-and-test loop where the ~7 minute -Osize whole-module build is the
+# bottleneck. Never use it for a release: the dylib is larger and slower.
+ifeq ($(EEVEE_FAST),1)
+EeveeSpotify_SWIFTFLAGS = -ISources/EeveeSpotifyC/include -Onone
+EeveeSpotify_CFLAGS = -fobjc-arc -ISources/EeveeSpotifyC/include -O0
+else
 EeveeSpotify_SWIFTFLAGS = -ISources/EeveeSpotifyC/include -Osize
-EeveeSpotify_EXTRA_FRAMEWORKS = EeveeSwiftProtobuf
 EeveeSpotify_CFLAGS = -fobjc-arc -ISources/EeveeSpotifyC/include -Os
+endif
+EeveeSpotify_EXTRA_FRAMEWORKS = EeveeSwiftProtobuf
 
 # RootHide's compatibility implementation of libroot resolves jailbreak paths
 # through libroothide at runtime. Rootless builds continue to use libroot.

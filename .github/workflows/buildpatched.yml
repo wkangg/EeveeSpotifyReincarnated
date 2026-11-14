@@ -12,6 +12,11 @@ on:
         default: ""
         required: false
         type: string
+      fast:
+        description: "Fast build (-Onone, low IPA compression) — for testing, not releases"
+        default: false
+        required: false
+        type: boolean
       upload_method:
         description: "Where to upload the built IPA"
         default: "artifacts"
@@ -29,6 +34,11 @@ env:
 jobs:
   build:
     runs-on: macos-latest
+    # Re-dispatching the same branch while a build is in flight is the normal
+    # case in the test loop; don't leave the old one occupying a runner.
+    concurrency:
+      group: buildpatched-${{ inputs.branch }}
+      cancel-in-progress: true
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -61,18 +71,41 @@ jobs:
           sudo chmod +x /usr/local/bin/ipapatch
           ipapatch --help >/dev/null
 
+      # The framework is built from a pinned swift-protobuf tag, so it is fully
+      # reproducible and worth caching: it is ~100s of every build otherwise.
+      - name: Cache EeveeSwiftProtobuf.framework
+        id: protobuf-cache
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/theos/lib/iphone/rootless/EeveeSwiftProtobuf.framework
+          key: eeveeswiftprotobuf-${{ runner.os }}-${{ runner.arch }}-xcode26.1.1-${{ env.SWIFTPROTOBUF_VERSION }}-${{ hashFiles('Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh') }}
+
       - name: Build EeveeSwiftProtobuf.framework from source
+        if: steps.protobuf-cache.outputs.cache-hit != 'true'
         env:
           SWIFTPROTOBUF_VERSION: ${{ env.SWIFTPROTOBUF_VERSION }}
         run: |
           chmod +x Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
           Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
 
+      # Theos tracks its own dependencies, so restoring intermediates lets an
+      # unchanged file skip recompilation. Keyed per commit, restoring from the
+      # branch's previous build.
+      - name: Cache Theos build intermediates
+        uses: actions/cache@v4
+        with:
+          path: ${{ github.workspace }}/.theos
+          key: theos-obj-${{ runner.os }}-${{ inputs.branch }}-${{ github.sha }}-fast${{ inputs.fast }}
+          restore-keys: |
+            theos-obj-${{ runner.os }}-${{ inputs.branch }}-
+            theos-obj-${{ runner.os }}-
+
       - name: Build .deb (rootless)
         env:
           REPO_SLUG: ${{ github.repository }}
         run: |
-          THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1
+          THEOS_PACKAGE_SCHEME=rootless make package FINALPACKAGE=1 \
+              EEVEE_FAST=${{ inputs.fast && '1' || '0' }} -j"$(sysctl -n hw.ncpu)"
           DEB_PATH=$(find packages -name "com.eevee.spotify_*.deb" | head -1)
           [ -n "$DEB_PATH" ] || { echo "deb not produced" >&2; exit 1; }
           echo "DEB_PATH=$DEB_PATH"   >> $GITHUB_ENV
@@ -139,8 +172,11 @@ jobs:
 
           # cyan: -du strips appex/Watch (we don't have a wildcard profile),
           # -m 15.0 sets MinimumOSVersion floor, -c 9 max compression.
+          # -c 9 is max compression; in a fast build the upload/download of a
+          # slightly larger IPA costs far less than the time to compress it.
+          COMPRESSION=${{ inputs.fast && '1' || '9' }}
           cyan -i ${{ github.workspace }}/spotify.ipa -o "$OUT" \
-               -f "${INJECT[@]}" -c 9 -m 15.0 -du
+               -f "${INJECT[@]}" -c "$COMPRESSION" -m 15.0 -du
           echo "OUT_IPA=$OUT" >> $GITHUB_ENV
 
       - name: LC-inject zxPluginsInject (ipapatch)
@@ -149,35 +185,25 @@ jobs:
           ipapatch --input "$OUT_IPA" --inplace --noconfirm \
                    --dylib packages/zxPluginsInject.dylib
 
-      - name: Inject OpeninSafariSpotify extension into IPA PlugIns
+      # One unzip/rezip for both edits; these used to be two steps, each
+      # unpacking and repacking the whole ~150MB IPA.
+      - name: Inject Safari extension and strip Watch app
         if: ${{ inputs.ipa_url != '' }}
         run: |
           cd "$(dirname "$OUT_IPA")"
+          IPA_NAME="$(basename "$OUT_IPA")"
           rm -rf Payload
-          unzip -q "$(basename "$OUT_IPA")"
+          unzip -q "$IPA_NAME"
 
           mkdir -p "Payload/Spotify.app/PlugIns"
           rm -rf "Payload/Spotify.app/PlugIns/OpenSpotifySafariExtension.appex"
           cp -R "$OPENSPOTIFY_APPEX" "Payload/Spotify.app/PlugIns/OpenSpotifySafariExtension.appex"
 
-          # Repack only the Payload folder back into the IPA
-          zip -qry "$(basename "$OUT_IPA")" Payload
-          rm -rf Payload
+          rm -rf "Payload/Spotify.app/com.apple.WatchPlaceholder"
+          rm -rf "Payload/Spotify.app/Watch"
 
-      - name: Strip Watch app (if any survived)
-        if: ${{ inputs.ipa_url != '' }}
-        run: |
-          cd "$(dirname "$OUT_IPA")"
-          rm -rf Payload
-          unzip -q "$(basename "$OUT_IPA")"
-          if [ -d "Payload/Spotify.app/com.apple.WatchPlaceholder" ]; then
-            rm -rf Payload/Spotify.app/com.apple.WatchPlaceholder
-          fi
-          if [ -d "Payload/Spotify.app/Watch" ]; then
-            rm -rf Payload/Spotify.app/Watch
-          fi
-          rm -f "$(basename "$OUT_IPA")"
-          zip -qry "$(basename "$OUT_IPA")" Payload
+          rm -f "$IPA_NAME"
+          zip -qry "$IPA_NAME" Payload
           rm -rf Payload
 
       - name: Stage alternate app icons
