@@ -133,6 +133,47 @@ func activateDiagProductState() {
     dumpProductStateResolvers()
     installInjectorLogger()
     neutralizePlayerRestrictions()
+    forceOnDemandCapabilities()
+}
+
+// MARK: - On-demand / queue capability getters
+// The queue button and on-demand track taps are gated by an ObjC capability
+// layer (isOnDemandPlaybackAllowed, hasOnDemandPermission, canAddToQueue, …)
+// read as Free. Force every no-arg BOOL getter with these names to YES and log
+// which class owned each, so we can see the authoritative one.
+private let capabilitySelectors: Set<String> = [
+    "isOnDemandPlaybackAllowed", "hasOnDemandPermission", "hasOnDemandAccess",
+    "hasOnDemandType", "onDemandAllowed", "allowsOnDemand", "canAddToQueue",
+    "canPlayOnDemand", "isOnDemandEnabled", "isOnDemandInFree",
+]
+
+private func forceOnDemandCapabilities() {
+    let total = objc_getClassList(nil, 0)
+    guard total > 0 else { return }
+    let buffer = UnsafeMutablePointer<AnyClass>.allocate(capacity: Int(total))
+    defer { buffer.deallocate() }
+    let got = objc_getClassList(AutoreleasingUnsafeMutablePointer(buffer), total)
+
+    var forced: [String] = []
+    for i in 0..<Int(min(got, total)) {
+        let cls: AnyClass = buffer[i]
+        guard inheritsFromNSObject(cls) else { continue }
+        var count: UInt32 = 0
+        guard let list = class_copyMethodList(cls, &count) else { continue }
+        defer { free(list) }
+        let clsName = String(cString: class_getName(cls))
+        for j in 0..<Int(count) {
+            let m = list[j]
+            let name = String(cString: sel_getName(method_getName(m)))
+            guard capabilitySelectors.contains(name) else { continue }
+            let enc = strippedEncoding(m)
+            guard enc == "B@:" || enc == "c@:" else { continue } // no-arg BOOL getter
+            let block: @convention(block) (AnyObject) -> ObjCBool = { _ in ObjCBool(true) }
+            class_replaceMethod(cls, method_getName(m), imp_implementationWithBlock(block), "B@:")
+            forced.append("\(clsName).\(name)")
+        }
+    }
+    writeDebugLog("[DIAG][CAPS] forced \(forced.count) getter(s) to YES: \(forced.sorted())")
 }
 
 // MARK: - SPTPlayerRestrictions — strip Free playback restrictions
