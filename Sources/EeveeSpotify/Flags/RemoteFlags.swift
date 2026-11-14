@@ -102,6 +102,33 @@ final class RemoteFlags {
 
     // MARK: Hot path
 
+    // MARK: Playback-gate probe
+    //
+    // We have been guessing which remote-config flags gate the queue entry
+    // point and on-demand playback. This logs each matching flag once, with the
+    // value Spotify actually computed and whatever we overrode it to, so the gate
+    // can be read off the log instead of inferred. Capped and deduped; writes to
+    // writeDebugLog so it lands in the captured log rather than NSLog.
+    private static let probeNeedles = [
+        "queue", "ondemand", "on_demand", "mft", "freetier", "free_tier",
+        "reinventfree", "restriction", "fma",
+    ]
+    private var probedKeys = Set<String>()
+
+    private func probePlaybackFlag(_ key: String, orig: Any, effective: Any?) {
+        let lowered = key.lowercased()
+        guard Self.probeNeedles.contains(where: { lowered.contains($0) }) else { return }
+        lock.lock()
+        let isNew = probedKeys.count < 120 && probedKeys.insert(key).inserted
+        lock.unlock()
+        guard isNew else { return }
+        if let effective {
+            writeDebugLog("[GATE_PROBE] \(key) spotify=\(orig) -> forced=\(effective)")
+        } else {
+            writeDebugLog("[GATE_PROBE] \(key) spotify=\(orig)")
+        }
+    }
+
     func resolve(
         _ key: String,
         kind: FlagKind,
@@ -112,6 +139,7 @@ final class RemoteFlags {
         since start: UInt64
     ) -> Any? {
         let value = effective[key]
+        probePlaybackFlag(key, orig: orig, effective: value)
         lock.lock()
         reads += 1
         if value != nil { applied += 1 }

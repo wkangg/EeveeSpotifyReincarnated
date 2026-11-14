@@ -222,6 +222,7 @@ struct EeveeSpotify: Tweak {
         // Must precede activateRemoteFlags(), which snapshots the forced flags.
         activatePremiumPlaybackGate()
         activateDiagProductState()
+        activateDiagQueueGate()
 
         activateTelemetryBlock()
         activateTheme()

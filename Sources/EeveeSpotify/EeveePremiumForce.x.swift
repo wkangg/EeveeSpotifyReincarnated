@@ -142,13 +142,13 @@ private func rewritePremiumDict(_ dict: NSDictionary) -> NSDictionary {
     // this rewrite is the only reason a dict reader still sees Premium.
     if dict["type"] as? String == "free" || dict["ads"] as? String == "1", dictRewriteFreeLogCount < 5 {
         dictRewriteFreeLogCount += 1
-        NSLog("[FORCE][PS.dict] core reported Free (keys=%lu); rewrote to Premium", dict.count)
+        writeDebugLog("[FORCE][PS.dict] core reported Free (keys=\(dict.count)); rewrote to Premium")
     }
     // valuesDictFromMap: is a hot path - every core map read lands here - so the
     // rewrite is logged a handful of times rather than on every call.
     if changed > 0, dictRewriteLogCount < 5 {
         dictRewriteLogCount += 1
-        NSLog("[FORCE][PS.dict] rewrote %d keys (in=%lu out=%lu)", changed, dict.count, mutable.count)
+        writeDebugLog("[FORCE][PS.dict] rewrote \(changed) keys (in=\(dict.count) out=\(mutable.count))")
     }
     return mutable
 }
@@ -289,7 +289,7 @@ private func swizzleBoolGetter(_ cls: AnyClass, _ name: String, _ value: Bool) {
 
 struct EeveePremiumForceGroup: HookGroup {}
 
-private let enableDictRewrite = true
+private let enableDictRewrite = false
 private let enableDirectGetters = true
 private let enableAdsHook = true
 private let enablePassiveProductStateLog = true
