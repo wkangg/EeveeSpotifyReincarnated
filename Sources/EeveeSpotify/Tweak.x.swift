@@ -4,6 +4,10 @@ import UIKit
 import Foundation
 import ObjectiveC.runtime
 
+// Diagnostic only: disables every ad, telemetry and upsell blocker so the
+// truncated-playback cause can be bisected. Must be false for any real build.
+let diagDisableBlockers = true
+
 func writeDebugLog(_ message: String) {
     EeveeLog.write("[EeveeSpotify] " + message)
 }
@@ -186,7 +190,7 @@ func eeveeEnvFlag(_ name: String) -> Bool {
 
 struct EeveeSpotify: Tweak {
     static let version = "7.0.1"
-    static let buildNumber = "4"
+    static let buildNumber = "5"
     static let spotifyVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     static let repoSlug = GeneratedConfig.repoSlug
     
@@ -226,7 +230,16 @@ struct EeveeSpotify: Tweak {
         activateDiagPlayerSkip()
         activateDiagNebulaAttributes()
 
-        activateTelemetryBlock()
+        // Bisect: tracks truncate at 0/5/8s even when the core still reported
+        // Free, so the cause is not the premium forcing. The remaining suspects
+        // are the ad/telemetry/upsell blockers, which kill services and cancel
+        // requests the player may depend on. Turn the whole category off for one
+        // build; if playback goes continuous, narrow down from here.
+        if diagDisableBlockers {
+            writeDebugLog("[DIAG][BISECT] ad/telemetry/upsell blocking DISABLED for this build")
+        } else {
+            activateTelemetryBlock()
+        }
         activateTheme()
         activateLiquidGlass()
         activatePlayerGestures()
@@ -241,14 +254,16 @@ struct EeveeSpotify: Tweak {
         activateRatingPromptBlock()
 
         activateEeveeCrossfadeForce()
-        activateEeveeAdBlockerExtended()
-        activateUpsellPopupBlocker()
-        activateUpsellServiceBlocker()
-        activateClientMessagingPlatformBlocker()
+        if !diagDisableBlockers {
+            activateEeveeAdBlockerExtended()
+            activateUpsellPopupBlocker()
+            activateUpsellServiceBlocker()
+            activateClientMessagingPlatformBlocker()
 
-        if NSClassFromString("HUBViewModelBuilderImplementation") != nil {
-            AdBlockerGroup().activate()
-            eeveeLog("[EeveeSpotify] AdBlockerGroup activated")
+            if NSClassFromString("HUBViewModelBuilderImplementation") != nil {
+                AdBlockerGroup().activate()
+                eeveeLog("[EeveeSpotify] AdBlockerGroup activated")
+            }
         }
 
         // UIPasteboard.general is a private subclass whose setters bypass the base-class hooks.
