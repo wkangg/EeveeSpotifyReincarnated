@@ -22,6 +22,7 @@ import Foundation
 enum DiagNebulaAttributes {
     private static var strippedCount = 0
     private static var loggedBodies = 0
+    private static let dumpFullBody = false
 
     // MARK: Request side - force a body to exist
 
@@ -108,9 +109,12 @@ enum DiagNebulaAttributes {
         let runs = printableRuns(data, limit: 60)
         writeDebugLog("[DIAG][NEBULA] strings(\(runs.count)): \(runs.joined(separator: " | "))")
 
-        // Dump the whole body so its protobuf layout can be parsed exactly
-        // rather than guessed from printable fragments. Chunked because the
-        // log writer is line oriented.
+        // The layout is confirmed: this body is an AccountAttributesResponse
+        // (map<string, AccountAttribute>, stringValue at field 4), which matches
+        // the observed bytes exactly and is the proto the repo already
+        // generates. The full base64 dump is no longer needed - the rewrite
+        // itself reports before/after - so it is left off.
+        guard dumpFullBody else { return }
         let encoded = data.base64EncodedString()
         let chunk = 400
         let total = (encoded.count + chunk - 1) / chunk
