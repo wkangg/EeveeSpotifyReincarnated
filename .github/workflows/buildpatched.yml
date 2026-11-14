@@ -88,18 +88,6 @@ jobs:
           chmod +x Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
           Tools/SwiftProtobufBuild/build-eeveeswiftprotobuf.sh
 
-      # Theos tracks its own dependencies, so restoring intermediates lets an
-      # unchanged file skip recompilation. Keyed per commit, restoring from the
-      # branch's previous build.
-      - name: Cache Theos build intermediates
-        uses: actions/cache@v4
-        with:
-          path: ${{ github.workspace }}/.theos
-          key: theos-obj-${{ runner.os }}-${{ inputs.branch }}-${{ github.sha }}-fast${{ inputs.fast }}
-          restore-keys: |
-            theos-obj-${{ runner.os }}-${{ inputs.branch }}-
-            theos-obj-${{ runner.os }}-
-
       - name: Build .deb (rootless)
         env:
           REPO_SLUG: ${{ github.repository }}
