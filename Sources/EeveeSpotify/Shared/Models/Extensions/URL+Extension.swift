@@ -1,5 +1,9 @@
 import Foundation
 
+// Set back to true to restore the previous behaviour of cancelling Spotify's
+// audio event tracking along with real ad hosts.
+private let blockAudioEventTracking = false
+
 extension URL {
     var isLyrics: Bool {
         self.path.contains("color-lyrics/v2")
@@ -146,13 +150,21 @@ extension URL {
             return true
         }
         
+        // aet.spotify.com is audio *event tracking* - playback reporting - not ad
+        // delivery. It was being cancelled 137 times in a single session, in
+        // retry bursts around playback, and Spotify drops a stream it cannot
+        // report on, which is the shape of the ~8s truncation. Ad content itself
+        // is blocked by the ad service hooks, not by this host, so letting the
+        // reports through does not surface ads.
+        if blockAudioEventTracking && (host == "aet.spotify.com" || host.hasPrefix("aet.")) {
+            return true
+        }
+
         // Block known ad hostnames
         if host.contains("doubleclick") ||
            host.contains("googlesyndication") ||
            host == "ad.spotify.com" ||
-           host == "ads.spotify.com" ||
-           host == "aet.spotify.com" ||
-           host.hasPrefix("aet.") {
+           host == "ads.spotify.com" {
             return true
         }
         
