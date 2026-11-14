@@ -132,6 +132,50 @@ func activateDiagProductState() {
     writeDebugLog("[DIAG][MINIMAL_SESSION] scanned \(got) classes, \(found) implementation(s)")
     dumpProductStateResolvers()
     installInjectorLogger()
+    neutralizePlayerRestrictions()
+}
+
+// MARK: - SPTPlayerRestrictions — strip Free playback restrictions
+// The 9.2 player gates queue / on-demand track selection / seeking through the
+// SPTPlayerRestrictions object on each player state. The product-state hooks
+// can't reach the native license, so neutralise the license-related disallow
+// getters directly: BOOL getters return NO, their *ReasonsArray return empty.
+private let restrictionKeywords = [
+    "AddToQueue", "InsertingInto", "PlayAsNextInQueue", "Seeking",
+    "TapToPlay", "SetQueue", "ReorderingEnqueued", "ViewingQueue",
+    "RemovingFrom", "Reordering",
+]
+
+private func neutralizePlayerRestrictions() {
+    guard let cls: AnyClass = NSClassFromString("SPTPlayerRestrictions") else {
+        writeDebugLog("[DIAG][RESTRICT] SPTPlayerRestrictions not found")
+        return
+    }
+    var count: UInt32 = 0
+    guard let list = class_copyMethodList(cls, &count) else { return }
+    defer { free(list) }
+
+    let emptyArray = NSArray()
+    var neutralized: [String] = []
+    for i in 0..<Int(count) {
+        let m = list[i]
+        let sel = method_getName(m)
+        let name = String(cString: sel_getName(sel))
+        guard name.hasPrefix("disallow"), !name.hasSuffix(":") else { continue }
+        guard restrictionKeywords.contains(where: { name.contains($0) }) else { continue }
+
+        let ret = strippedEncoding(m).first
+        if ret == "B" || ret == "c" {
+            let block: @convention(block) (AnyObject) -> ObjCBool = { _ in ObjCBool(false) }
+            class_replaceMethod(cls, sel, imp_implementationWithBlock(block), "B@:")
+            neutralized.append("\(name)=NO")
+        } else if ret == "@" && name.hasSuffix("ReasonsArray") {
+            let block: @convention(block) (AnyObject) -> AnyObject = { _ in emptyArray }
+            class_replaceMethod(cls, sel, imp_implementationWithBlock(block), "@@:")
+            neutralized.append("\(name)=[]")
+        }
+    }
+    writeDebugLog("[DIAG][RESTRICT] neutralized \(neutralized.count): \(neutralized.sorted())")
 }
 
 // MARK: - RCCProductStateInjector.injectWithAttributesData:error:
