@@ -153,6 +153,10 @@ class HttpClientURLSessionHook: ClassHook<NSObject>, SpotifySessionDelegate {
         if CasitaResponseProbe.shouldProbe(url) {
             CasitaResponseProbe.append(data, for: task)
         }
+        // Read-only: the body is still forwarded untouched below.
+        if url.isNebulaAttributes {
+            DiagNebulaAttributes.logBody(data, url: url)
+        }
         if SpotifyResponsePatcher.shouldModify(url) {
             URLSessionHelper.shared.setOrAppend(data, for: task)
             return

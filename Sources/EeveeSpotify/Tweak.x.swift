@@ -224,6 +224,7 @@ struct EeveeSpotify: Tweak {
         activateDiagProductState()
         activateDiagQueueGate()
         activateDiagPlayerSkip()
+        activateDiagNebulaAttributes()
 
         activateTelemetryBlock()
         activateTheme()
