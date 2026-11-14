@@ -6,7 +6,7 @@ import ObjectiveC.runtime
 
 // Diagnostic only: disables every ad, telemetry and upsell blocker so the
 // truncated-playback cause can be bisected. Must be false for any real build.
-let diagDisableBlockers = false
+let diagDisableBlockers = true
 
 // Diagnostic only: disables every premium force - the ObjC product-state
 // getters, bootstrap/response patching, and with it the nebula attributes
@@ -198,7 +198,7 @@ func eeveeEnvFlag(_ name: String) -> Bool {
 
 struct EeveeSpotify: Tweak {
     static let version = "7.0.1"
-    static let buildNumber = "8"
+    static let buildNumber = "9"
     static let spotifyVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     static let repoSlug = GeneratedConfig.repoSlug
     
