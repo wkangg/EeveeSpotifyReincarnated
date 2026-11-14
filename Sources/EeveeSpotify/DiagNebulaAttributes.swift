@@ -102,12 +102,28 @@ enum DiagNebulaAttributes {
     }
 
     static func logBody(_ data: Data, url: URL) {
-        guard loggedBodies < 4 else { return }
+        guard loggedBodies < 1 else { return }
         loggedBodies += 1
-        let head = data.prefix(32).map { String(format: "%02x", $0) }.joined()
-        writeDebugLog("[DIAG][NEBULA] body \(data.count) bytes head=\(head)")
+        writeDebugLog("[DIAG][NEBULA] body \(data.count) bytes")
         let runs = printableRuns(data, limit: 60)
         writeDebugLog("[DIAG][NEBULA] strings(\(runs.count)): \(runs.joined(separator: " | "))")
+
+        // Dump the whole body so its protobuf layout can be parsed exactly
+        // rather than guessed from printable fragments. Chunked because the
+        // log writer is line oriented.
+        let encoded = data.base64EncodedString()
+        let chunk = 400
+        let total = (encoded.count + chunk - 1) / chunk
+        writeDebugLog("[DIAG][NEBULA] b64 begin \(encoded.count) chars in \(total) parts")
+        var index = encoded.startIndex
+        var part = 0
+        while index < encoded.endIndex {
+            let end = encoded.index(index, offsetBy: chunk, limitedBy: encoded.endIndex) ?? encoded.endIndex
+            writeDebugLog("[DIAG][NEBULA] b64 \(part)/\(total) \(encoded[index..<end])")
+            index = end
+            part += 1
+        }
+        writeDebugLog("[DIAG][NEBULA] b64 end")
     }
 }
 
