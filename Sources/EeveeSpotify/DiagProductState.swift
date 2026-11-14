@@ -130,4 +130,39 @@ func activateDiagProductState() {
         }
     }
     writeDebugLog("[DIAG][MINIMAL_SESSION] scanned \(got) classes, \(found) implementation(s)")
+    dumpProductStateResolvers()
+}
+
+// List every NSObject subclass whose name points at the Swift product-state
+// layer the 9.2 player reads, with its instance-method selectors. This finds
+// the per-key chokepoint we can force Premium at, the way we already force
+// SPTCoreProductState's getters.
+private func dumpProductStateResolvers() {
+    let interesting = ["ProductStateResolver", "ProductStateStorage", "ProductStateTable",
+                       "ProductStateReactiveValue", "PLProductState", "ProductStateImpl",
+                       "ProductStateParser", "ProductStateInjector", "ProductStateDataSource"]
+    let total = objc_getClassList(nil, 0)
+    guard total > 0 else { return }
+    let buffer = UnsafeMutablePointer<AnyClass>.allocate(capacity: Int(total))
+    defer { buffer.deallocate() }
+    let got = objc_getClassList(AutoreleasingUnsafeMutablePointer(buffer), total)
+
+    var dumped = 0
+    for i in 0..<Int(min(got, total)) {
+        let cls: AnyClass = buffer[i]
+        guard inheritsFromNSObject(cls) else { continue }
+        let name = String(cString: class_getName(cls))
+        guard interesting.contains(where: { name.contains($0) }) else { continue }
+
+        var count: UInt32 = 0
+        guard let list = class_copyMethodList(cls, &count) else { continue }
+        defer { free(list) }
+        var sels: [String] = []
+        for j in 0..<Int(count) {
+            sels.append(String(cString: sel_getName(method_getName(list[j]))))
+        }
+        dumped += 1
+        writeDebugLog("[DIAG][PS_RESOLVER] \(name) methods=\(sels.sorted())")
+    }
+    writeDebugLog("[DIAG][PS_RESOLVER] dumped \(dumped) product-state class(es)")
 }

@@ -79,7 +79,11 @@ class SPTAuthSessionHook: ClassHook<NSObject> {
     func productStateUpdated(_ state: AnyObject) {
         let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
         writeDebugLog("[AUTH] productStateUpdated at \(elapsed)s -- \(diagDescribeProductState(state))")
-        orig.productStateUpdated(state)
+        // DIAG experiment: rewrite the Free dict the login5/core path pushes at
+        // ~1s to Premium, and see if the player's entitlements follow.
+        let seeded = diagSeedPremium(state) ?? state
+        writeDebugLog("[AUTH] productStateUpdated seeded -- \(diagDescribeProductState(seeded))")
+        orig.productStateUpdated(seeded)
     }
 
     func tryReconnect(_ arg1: AnyObject, toAP arg2: AnyObject) {
