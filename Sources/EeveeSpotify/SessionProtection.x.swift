@@ -342,7 +342,12 @@ class URLSessionTaskResumeHook: ClassHook<NSObject> {
 
             diagNetLog("RESUME", url, extra: "task=\(type(of: task))")
 
-            if url.isAdRelated {
+            // This cancellation lives in the session-protection group rather than
+            // the ad blocker, so the first bisect left it running and did not
+            // actually clear the category. ad-logic/v3/config was still being
+            // cancelled 8 times per session, and a player whose ad subsystem
+            // cannot load its config is a plausible cause of tracks being cut.
+            if url.isAdRelated && !diagDisableBlockers {
                 writeDebugLog("[ORACLE][NET_BLOCK] Cancelled ad task at \(elapsedInt)s: \(host)\(path)")
                 task.cancel()
                 return
