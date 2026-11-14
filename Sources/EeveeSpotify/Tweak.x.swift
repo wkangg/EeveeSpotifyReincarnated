@@ -6,7 +6,15 @@ import ObjectiveC.runtime
 
 // Diagnostic only: disables every ad, telemetry and upsell blocker so the
 // truncated-playback cause can be bisected. Must be false for any real build.
-let diagDisableBlockers = true
+let diagDisableBlockers = false
+
+// Diagnostic only: disables every premium force - the ObjC product-state
+// getters, bootstrap/response patching, and with it the nebula attributes
+// rewrite. This is the one variable never yet tested: the ObjC getters have
+// returned Premium in every build so far, including the ones where the core
+// still reported Free, so "it truncated while the core was Free" never ruled
+// premium forcing out. Must be false for any real build.
+let diagDisablePremium = true
 
 func writeDebugLog(_ message: String) {
     EeveeLog.write("[EeveeSpotify] " + message)
@@ -190,7 +198,7 @@ func eeveeEnvFlag(_ name: String) -> Bool {
 
 struct EeveeSpotify: Tweak {
     static let version = "7.0.1"
-    static let buildNumber = "7"
+    static let buildNumber = "8"
     static let spotifyVersion = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "?"
     static let repoSlug = GeneratedConfig.repoSlug
     
@@ -222,7 +230,11 @@ struct EeveeSpotify: Tweak {
         }
 
         // Local-only premium force; independent of patching, so premium UI survives everything else being off.
-        activateEeveePremiumForce()
+        if diagDisablePremium {
+            writeDebugLog("[DIAG][BISECT] premium forcing DISABLED for this build")
+        } else {
+            activateEeveePremiumForce()
+        }
         // Must precede activateRemoteFlags(), which snapshots the forced flags.
         activatePremiumPlaybackGate()
         activateDiagProductState()
@@ -314,7 +326,7 @@ struct EeveeSpotify: Tweak {
 
         if EeveeSpotify.hookTarget == .v91 {
 
-            if UserDefaults.patchType.isPatching {
+            if UserDefaults.patchType.isPatching && !diagDisablePremium {
                 PremiumBootstrapGroup().activate()
                 writeDebugLog("[INIT] Activated PremiumBootstrapGroup")
 
@@ -403,7 +415,7 @@ struct EeveeSpotify: Tweak {
             DarkPopUps().activate()
         }
         
-        if UserDefaults.patchType.isPatching {
+        if UserDefaults.patchType.isPatching && !diagDisablePremium {
             activatePremiumPatchingGroup()
         }
         
