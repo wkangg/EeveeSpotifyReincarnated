@@ -223,6 +223,7 @@ struct EeveeSpotify: Tweak {
         activatePremiumPlaybackGate()
         activateDiagProductState()
         activateDiagQueueGate()
+        activateDiagPlayerSkip()
 
         activateTelemetryBlock()
         activateTheme()

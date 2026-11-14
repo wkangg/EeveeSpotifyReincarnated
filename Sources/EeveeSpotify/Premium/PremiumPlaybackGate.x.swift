@@ -101,8 +101,19 @@ private func neutralizePlayerRestrictions() -> Int {
     return flags + reasons
 }
 
+// Off by default. Clearing the restrictions bridge made seeking work, but none
+// of the three levers tried (the bridge, the ios-feature-queue flags, and
+// NowPlaying's restrictions handling) produced a queue entry point, and tracks
+// are being cut short. Until we know what actually ends playback, this stays
+// off so the tweak is not changing player behaviour while we measure it.
+private let enablePlaybackGate = false
+
 /// Must run before `activateRemoteFlags()`, which snapshots the forced flags.
 func activatePremiumPlaybackGate() {
+    guard enablePlaybackGate else {
+        writeDebugLog("[Gate] off (enablePlaybackGate=false)")
+        return
+    }
     RemoteFlags.shared.force(queueRemoteFlags, by: "PlaybackGate")
     neutralizePlayerRestrictions()
 }
