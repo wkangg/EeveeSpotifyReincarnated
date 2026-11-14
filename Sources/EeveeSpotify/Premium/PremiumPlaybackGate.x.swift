@@ -22,20 +22,29 @@ import Foundation
 //      `disallow*` BOOL is derived from its reason set. Replacing the getters
 //      class-wide covers every instance, including the ones the player rebuilds
 //      on each state update.
-//   2. `ios-feature-queue.*` remote configuration, which decides whether the
-//      queue entry point is offered at all and whether queue permissions are
-//      resolved from player restrictions or from the free-tier/MFT+ state that
-//      only the backend can change.
+//   2. NowPlaying's player-state restrictions handling, which on 9.2 defaults to
+//      an "updated" path that does not read the ObjC bridge at all.
 
 private let queueRemoteFlags: [String: Any] = [
-    // Resolve queue permissions from SPTPlayerRestrictions, which is
-    // neutralised below, rather than from the free-tier state we cannot reach.
-    "ios-feature-queue.is_new_player_restriction_enabled": true,
-    // Offer the queue entry point even while the account still reads as MFT+.
-    "ios-feature-queue.is_queue_entry_point_enabled_for_mft_plus": true,
-    "ios-feature-queue.is_play_next_context_menu_enabled": true,
-    "ios-feature-queue.is_swipe_to_play_next_enabled": true,
+    // Measured on 9.2.0: Spotify computes this as true, which puts NowPlaying on
+    // the "updated" player-state restrictions path. The queue button lives in
+    // NowPlaying, and clearing the ObjC SPTPlayerRestrictions bridge below only
+    // ever reached the legacy path - which is why seeking (legacy) started
+    // working while the queue entry point (updated) stayed hidden. Force the
+    // legacy handling so both read the bridge we control.
+    "ios-feature-nowplayingplatform.updated_player_state_restrictions_handling_enabled": false,
 ]
+
+// Measured defaults on 9.2.0, kept here so they are not guessed at again:
+//   ios-feature-queue.is_new_player_restriction_enabled        = false
+//   ios-feature-queue.is_queue_entry_point_enabled_for_mft_plus = false
+//   ios-feature-queue.is_play_next_context_menu_enabled        = false
+//   ios-feature-queue.is_swipe_to_play_next_enabled            = false
+//   ios-feature-nowplaying.bottom_sheet_queue_enabled          = true
+//   ios-feature-nowplaying.jam_queue_button_enabled            = true
+//   ios-feature-nowplayingbar.queue_badge                      = true
+// Forcing the first four to true changed nothing: the queue *feature* flags are
+// already on, so the entry point is withheld by a permission, not a flag.
 
 // The two reason properties that are dictionaries rather than sets.
 private let dictionaryReasonSelectors: Set<String> = [
