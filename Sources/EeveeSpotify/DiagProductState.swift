@@ -29,6 +29,21 @@ func diagShouldLog(_ tag: String, limit: Int) -> Bool {
     return n <= limit
 }
 
+// Experiment: the core is seeded from this cached dict, and the player enforces
+// Free restrictions from the core's state, not from the ObjC getters we force.
+let diagPremiumSeed: [String: String] = [
+    "type": "premium", "catalogue": "premium", "product": "premium",
+    "ads": "0", "on-demand": "1", "unrestricted": "1", "shuffle-eligible": "1",
+    "player-license": "premium", "player-license-v2": "premium",
+]
+
+func diagSeedPremium(_ value: AnyObject?) -> AnyObject? {
+    guard let dict = value as? NSDictionary else { return value }
+    let m = NSMutableDictionary(dictionary: dict)
+    for (k, v) in diagPremiumSeed { m[k] = v }
+    return m
+}
+
 private typealias MinimalSessionIMP = @convention(c) (
     AnyObject, Selector,
     AnyObject?, AnyObject?, AnyObject?, AnyObject?,
@@ -76,6 +91,8 @@ private func installMinimalSessionLogger(_ method: Method, owner: String) {
     ) -> AnyObject? = { obj, scope, setup, storage, config, productState, creds, token, backoff, expEnabled in
         let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
         writeDebugLog("[DIAG][MINIMAL_SESSION] t=\(elapsed)s \(owner) productStateDict: \(diagDescribeProductState(productState))")
+        let productState = diagSeedPremium(productState)
+        writeDebugLog("[DIAG][MINIMAL_SESSION] t=\(elapsed)s seeded: \(diagDescribeProductState(productState))")
         let orig = unsafeBitCast(originalMinimalSessionIMP!, to: MinimalSessionIMP.self)
         return orig(obj, Selector((minimalSessionSelectorName)),
                     scope, setup, storage, config, productState, creds, token, backoff, expEnabled)

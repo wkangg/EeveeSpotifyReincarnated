@@ -193,8 +193,17 @@ class CoreProductStateHook: ClassHook<NSObject> {
             let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
             writeDebugLog("[DIAG][PRODUCT_STATE] t=\(elapsed)s initWithValuesDict \(diagDescribeProductState(dict))")
         }
-        let d = enableDictRewrite ? rewritePremiumDict(dict) : dict
-        return orig.initWithValuesDict(d, scheduler: scheduler)
+        let d = enableDictRewrite ? rewritePremiumDict(dict) : (diagSeedPremium(dict) as? NSDictionary ?? dict)
+        let instance = orig.initWithValuesDict(d, scheduler: scheduler)
+        let obj = instance as AnyObject
+        let sel = NSSelectorFromString("setOverrides:")
+        if obj.responds(to: sel) {
+            _ = obj.perform(sel, with: NSDictionary(dictionary: diagPremiumSeed))
+            writeDebugLog("[DIAG][PRODUCT_STATE] applied setOverrides: on \(type(of: obj))")
+        } else {
+            writeDebugLog("[DIAG][PRODUCT_STATE] \(type(of: obj)) has no setOverrides:")
+        }
+        return instance
     }
 
     func stringForKey(_ key: NSString) -> NSString? {

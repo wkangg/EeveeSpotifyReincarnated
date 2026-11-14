@@ -78,7 +78,7 @@ class SPTAuthSessionHook: ClassHook<NSObject> {
 
     func productStateUpdated(_ state: AnyObject) {
         let elapsed = Int(Date().timeIntervalSince(tweakInitTime))
-        writeDebugLog("[AUTH] productStateUpdated at \(elapsed)s -- \(state)")
+        writeDebugLog("[AUTH] productStateUpdated at \(elapsed)s -- \(diagDescribeProductState(state))")
         orig.productStateUpdated(state)
     }
 
