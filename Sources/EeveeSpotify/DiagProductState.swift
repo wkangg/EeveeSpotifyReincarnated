@@ -132,8 +132,11 @@ func activateDiagProductState() {
     writeDebugLog("[DIAG][MINIMAL_SESSION] scanned \(got) classes, \(found) implementation(s)")
     dumpProductStateResolvers()
     installInjectorLogger()
-    neutralizePlayerRestrictions()
-    forceOnDemandCapabilities()
+    // Superseded by activatePremiumPlaybackGate(): this pass looked for
+    // "*ReasonsArray" getters, which do not exist (the real suffix is
+    // "Reasons"), so it only ever cleared the BOOLs. forceOnDemandCapabilities()
+    // scanned the whole ObjC class list and never reached its own log line, so
+    // it is left out rather than run blind.
 }
 
 // MARK: - On-demand / queue capability getters

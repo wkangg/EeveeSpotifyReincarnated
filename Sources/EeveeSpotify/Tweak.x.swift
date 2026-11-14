@@ -219,6 +219,8 @@ struct EeveeSpotify: Tweak {
 
         // Local-only premium force; independent of patching, so premium UI survives everything else being off.
         activateEeveePremiumForce()
+        // Must precede activateRemoteFlags(), which snapshots the forced flags.
+        activatePremiumPlaybackGate()
         activateDiagProductState()
 
         activateTelemetryBlock()
